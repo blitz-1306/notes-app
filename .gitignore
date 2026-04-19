@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+.pytest_cache/
+.env
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Test / coverage
+.coverage
+htmlcov/
+coverage.xml
+coverage/
+
+# Local docker compose overrides
+docker-compose.override.yml
+docker-compose.override.*.yml
+
+# Misc
+.DS_Store
+*.log
+*.sqlite
+*.db
