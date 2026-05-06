@@ -35,6 +35,23 @@ def test_login_bad_password(client):
     assert r.status_code == 401
 
 
+def test_login_bad_password_is_rate_limited(client):
+    client.post("/api/auth/register", json={"username": "dora", "password": "secret123"})
+
+    for _ in range(5):
+        r = client.post(
+            "/api/auth/login",
+            data={"username": "dora", "password": "wrong"},
+        )
+        assert r.status_code == 401
+
+    r = client.post(
+        "/api/auth/login",
+        data={"username": "dora", "password": "wrong"},
+    )
+    assert r.status_code == 429
+
+
 def test_protected_route_requires_token(client):
     r = client.get("/api/notes")
     assert r.status_code == 401

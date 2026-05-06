@@ -35,6 +35,25 @@ def test_change_password(client):
     assert r.status_code == 200
 
 
+def test_change_password_wrong_current_password_is_rate_limited(client):
+    h = _register_login(client)
+
+    for _ in range(5):
+        r = client.post(
+            "/api/account/change-password",
+            headers=h,
+            json={"current_password": "wrong", "new_password": "newpass123"},
+        )
+        assert r.status_code == 401
+
+    r = client.post(
+        "/api/account/change-password",
+        headers=h,
+        json={"current_password": "wrong", "new_password": "newpass123"},
+    )
+    assert r.status_code == 429
+
+
 def test_delete_account(client):
     h = _register_login(client, "alice", "pw123456")
     client.post("/api/notes", headers=h, json={"title": "mine", "content": ""})
