@@ -1,6 +1,9 @@
 from datetime import date, datetime
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
+
+NoteTag = Annotated[str, Field(min_length=1, max_length=40)]
 
 
 class UserCreate(BaseModel):
@@ -21,8 +24,8 @@ class TokenOut(BaseModel):
 
 class NoteIn(BaseModel):
     title: str = Field(min_length=1, max_length=200)
-    content: str = ""
-    tags: list[str] = []
+    content: str = Field(default="", max_length=20_000)
+    tags: list[NoteTag] = Field(default_factory=list, max_length=20)
     note_date: date | None = None
 
 
