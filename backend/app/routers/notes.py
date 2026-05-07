@@ -2,7 +2,8 @@ from calendar import monthrange
 from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import case, or_
+from sqlalchemy import case, cast, or_, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
 from ..deps import get_current_user, get_db
@@ -40,10 +41,30 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
+def _filter_by_tag(query, tag: str, db: Session):
+    needle = tag.strip().lower()
+    if not needle:
+        return query.filter(False)
+
+    dialect = db.get_bind().dialect.name
+    if dialect == "sqlite":
+        return query.filter(
+            text(
+                "EXISTS ("
+                "SELECT 1 FROM json_each(notes.tags) "
+                "WHERE json_each.value = :tag_needle"
+                ")"
+            )
+        ).params(tag_needle=needle)
+    if dialect == "postgresql":
+        return query.filter(cast(Note.tags, JSONB).contains([needle]))
+    return query.filter(Note.tags.contains([needle]))
+
+
 @router.get("", response_model=NotesPage)
 def list_notes(
     q: str | None = None,
-    tag: str | None = None,
+    tag: str | None = Query(None, max_length=40),
     date_from: date | None = None,
     date_to: date | None = None,
     archived: bool = False,
@@ -65,21 +86,8 @@ def list_notes(
     if date_to:
         query = query.filter(Note.note_date <= date_to)
 
-    # Tag filter requires JSON-aware logic; apply in Python to stay dialect-agnostic.
     if tag:
-        needle = tag.strip().lower()
-        candidates = [n for n in query.all() if needle in (n.tags or [])]
-        total = len(candidates)
-        candidates.sort(
-            key=lambda n: (
-                0 if n.pinned_at else 1,
-                -(n.pinned_at.timestamp() if n.pinned_at else 0.0),
-                -n.updated_at.timestamp(),
-                -n.id,
-            )
-        )
-        items = candidates[offset : offset + limit]
-        return NotesPage(items=items, total=total, limit=limit, offset=offset)
+        query = _filter_by_tag(query, tag, db)
 
     total = query.count()
     pin_order = case((Note.pinned_at.is_not(None), 0), else_=1)

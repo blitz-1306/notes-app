@@ -26,6 +26,34 @@ def test_create_and_list_note(client):
     assert len(body["items"]) == 1
 
 
+def test_rejects_oversized_note_payloads(client):
+    h = _auth(client)
+    assert (
+        client.post(
+            "/api/notes",
+            headers=h,
+            json={"title": "too-large", "content": "x" * 20_001},
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/api/notes",
+            headers=h,
+            json={"title": "too-many-tags", "tags": [f"t{i}" for i in range(21)]},
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/api/notes",
+            headers=h,
+            json={"title": "tag-too-long", "tags": ["x" * 41]},
+        ).status_code
+        == 422
+    )
+
+
 def test_note_isolation_between_users(client):
     h1 = _auth(client, "alice", "pw123456")
     h2 = _auth(client, "eve", "pw123456")
@@ -92,3 +120,22 @@ def test_filter_by_tag(client):
     r = client.get("/api/notes", headers=h, params={"tag": "work"})
     items = r.json()["items"]
     assert [n["title"] for n in items] == ["n1"]
+
+
+def test_filter_by_tag_keeps_total_and_pagination(client):
+    h = _auth(client)
+    for title, tags in [
+        ("first", ["work"]),
+        ("second", ["home"]),
+        ("third", ["work"]),
+    ]:
+        client.post("/api/notes", headers=h, json={"title": title, "content": "", "tags": tags})
+
+    r = client.get("/api/notes", headers=h, params={"tag": "WORK", "limit": 1, "offset": 1})
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["total"] == 2
+    assert body["limit"] == 1
+    assert body["offset"] == 1
+    assert [n["title"] for n in body["items"]] == ["first"]
